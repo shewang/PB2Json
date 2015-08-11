@@ -462,4 +462,46 @@ namespace PB2Json
 
         return ret;
     }
+
+	int ToPb2(Message& message, const Json::Value& value)
+    {
+        int ret = 0;
+        const Descriptor* pDescriptor = message.GetDescriptor();
+        const FieldDescriptor* pFieldDescriptor = NULL;
+        bool bRepeated = false;
+
+        Json::Value::Members members(value.getMemberNames());
+        for (Json::Value::Members::iterator it = members.begin(); it != members.end(); ++it)
+        {
+            const std::string &name = *it;
+            if (value[name].isNull())
+            {
+                continue;
+            }
+
+            pFieldDescriptor = pDescriptor->FindFieldByName(name);
+            if (NULL == pFieldDescriptor)
+            {
+                ret += 1;
+                continue;
+            }
+
+            bRepeated = pFieldDescriptor->is_repeated();
+            if ((bRepeated && !value[name].isArray()) || (!bRepeated && value[name].isArray()))
+            {
+                ret += 1;
+                continue;
+            }
+
+            if (bRepeated)
+            {
+                ret += ToPbRepeated(value[name], pFieldDescriptor, message);
+                continue;
+            }
+
+            ret += ToPbSingle(value[name], pFieldDescriptor, message);
+        }
+
+        return ret;
+    }
 }

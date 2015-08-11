@@ -66,6 +66,7 @@ namespace PB2Json
     int ToPbSingle(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message);
     int ToPbRepeated(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message);
     int ToPb(Message& message, const Json::Value& value);
+    int ToPb2(Message& message, const Json::Value& value);
 }
 #endif
 
