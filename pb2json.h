@@ -22,6 +22,7 @@
 #include <google/protobuf/message.h>
 #include <google/protobuf/descriptor.h>
 #include <json/json.h>
+#include <map>
 /*
 #if __BYTE_ORDER == __BIG_ENDIAN
 #ifndef ntohll
@@ -61,12 +62,14 @@ using namespace google::protobuf;
 namespace PB2Json
 {
     int ToJsonObj(const Message& message, Json::Value& value);
-    int ToJson(const Message& message, const FieldDescriptor* pFieldDescriptor, Json::Value& value);
+    int ToJson(const Message& message, const FieldDescriptor* pFieldDescriptor, Json::Value& value, std::map<std::string, std::string>& key_map);
     int ToJsonArray(const Message& message, const FieldDescriptor* pFieldDescriptor, Json::Value& value);
-    int ToPbSingle(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message);
-    int ToPbRepeated(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message);
+    int ToJsonObjMap(const Message& message, Json::Value& value, std::map<std::string, std::string>& key_map);
+    int ToPbSingle(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message, std::map<std::string, std::string>& key_map);
+    int ToPbRepeated(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message, std::map<std::string, std::string>& key_map);
     int ToPb(Message& message, const Json::Value& value);
     int ToPb2(Message& message, const Json::Value& value);
+    int ToPbMap(Message& message, const Json::Value& value, std::map<std::string, std::string>& key_map);
 }
 #endif
 

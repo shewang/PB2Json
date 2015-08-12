@@ -4,10 +4,9 @@
 
 namespace PB2Json
 {
-    int ToJson(const Message& message, const FieldDescriptor* pFieldDescriptor, Json::Value& value)
+    int ToJson(const Message& message, const FieldDescriptor* pFieldDescriptor, Json::Value& value, string& name_str, map<string, string>& key_map)
     {
         const Reflection* pReflection = message.GetReflection();
-        string name_str = pFieldDescriptor->name();
         int ret = 0;
 
         switch (pFieldDescriptor->cpp_type())
@@ -70,7 +69,15 @@ namespace PB2Json
             {
                 const Message& tmp = pReflection->GetMessage(message, pFieldDescriptor);
                 Json::Value tmp_value;
-                ToJsonObj(tmp, tmp_value);
+                if (key_map.size() == 0)
+                {
+                    ret = ToJsonObj(tmp, tmp_value);
+                }
+                else
+                {
+                    ret = ToJsonObjMap(tmp, tmp_value, key_map);
+                }
+
                 value[name_str] = tmp_value;
                 break;
             }
@@ -84,10 +91,9 @@ namespace PB2Json
         return ret;
     }
 
-    int ToJsonArray(const Message& message, const FieldDescriptor* pFieldDescriptor, Json::Value& value)
+    int ToJsonArray(const Message& message, const FieldDescriptor* pFieldDescriptor, Json::Value& value, string& name_str, map<string, string>& key_map)
     {
         const Reflection* pReflection = message.GetReflection();
-        string name_str = pFieldDescriptor->name();
         Json::Value tmp_value = Json::arrayValue;
         int ret = 0;
         for (int FieldNum = 0; FieldNum < pReflection->FieldSize(message, pFieldDescriptor); FieldNum++)
@@ -149,7 +155,14 @@ namespace PB2Json
                 {
                     const Message& tmp = pReflection->GetRepeatedMessage(message, pFieldDescriptor, FieldNum);
                     Json::Value t_value;
-                    ToJsonObj(tmp, t_value);
+                    if (key_map.size() == 0)
+                    {
+                       ret = ToJsonObj(tmp, t_value);
+                    }
+                    else
+                    {
+                        ret = ToJsonObjMap(tmp, t_value, key_map);
+                    }
                     tmp_value.push_back(t_value);
                     break;
                 }
@@ -178,14 +191,54 @@ namespace PB2Json
         {
             pFieldDescriptor = fields[i];
             bRepeated = pFieldDescriptor->is_repeated();
+            string name_str = pFieldDescriptor->name();
+            map<string, string> key_map;
 
             if (bRepeated)
             {
-                ret += ToJsonArray(message, pFieldDescriptor, value);
+                ret += ToJsonArray(message, pFieldDescriptor, value, name_str, key_map);
                 continue;
             }
 
-            ret += ToJson(message, pFieldDescriptor, value);
+            ret += ToJson(message, pFieldDescriptor, value, name_str, key_map);
+        }
+
+        return ret;
+    }
+
+    int ToJsonObjMap(const Message& message, Json::Value& value, map<string, string>& key_map)
+    {
+        const Reflection* pReflection = message.GetReflection();
+        const FieldDescriptor* pFieldDescriptor = NULL;
+        bool bRepeated = false;
+
+        std::vector<const FieldDescriptor*> fields;
+        pReflection->ListFields(message, &fields);
+        int ret = 0;
+
+        for (size_t i = 0; i < fields.size(); i++)
+        {
+            pFieldDescriptor = fields[i];
+            bRepeated = pFieldDescriptor->is_repeated();
+            string name_str = pFieldDescriptor->containing_type()->name() + "." + pFieldDescriptor->name();
+
+            map<string, string>::iterator it = key_map.find(name_str);
+            if (it != key_map.end())
+            {
+                name_str = it->second;
+            }
+            else
+            {
+                name_str = pFieldDescriptor->name();
+            }
+
+            if (bRepeated)
+            {
+                ret += ToJsonArray(message, pFieldDescriptor, value, name_str, key_map);
+                continue;
+            }
+
+            ret += ToJson(message, pFieldDescriptor, value, name_str, key_map);
         }
 
         return ret;
@@ -251,7 +304,7 @@ namespace PB2Json
         return false;
     }
 
-    int ToPbRepeated(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message)
+    int ToPbRepeated(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message, map<string, string>& key_map)
     {
         if (!check_type(value[0].type(), pFieldDescriptor->cpp_type()))
         {
@@ -261,6 +314,7 @@ namespace PB2Json
         const Reflection *pReflection = message.GetReflection();
         EnumDescriptor      *pEnumDes = NULL;
         EnumValueDescriptor *pEnumValueDes = NULL;
+        int ret = 0;
         for(uint32_t i = 0; i < value.size(); i++)
         {
             switch(pFieldDescriptor->cpp_type())
@@ -323,23 +377,28 @@ namespace PB2Json
                 case FieldDescriptor::CPPTYPE_MESSAGE:
                 {
                     Message *pmessage = pReflection->AddMessage(&message, pFieldDescriptor);
-                    if (0 != ToPb(*pmessage, value[i]))
+                    if (key_map.size() == 0)
                     {
-                        return 1;
+                        ret = ToPb(*pmessage, value[i]);
+                    }
+                    else
+                    {
+                        ret = ToPbMap(*pmessage, value[i], key_map);
                     }
                     break;
                 }
                 default:
                 {
+                    ret = 1;
                     break;
                 }
             }
         }
 
-        return 0;
+        return ret;
     }
 
-    int ToPbSingle(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message)
+    int ToPbSingle(const Json::Value &value, const FieldDescriptor *pFieldDescriptor, Message &message, map<string, string>& key_map)
     {
         if (!check_type(value.type(), pFieldDescriptor->cpp_type()))
         {
@@ -349,6 +408,7 @@ namespace PB2Json
         const Reflection *pReflection = message.GetReflection();
         EnumDescriptor      *pEnumDes = NULL;
         EnumValueDescriptor *pEnumValueDes = NULL;
+        int ret = 0;
         switch(pFieldDescriptor->cpp_type())
         {
             case FieldDescriptor::CPPTYPE_INT32:
@@ -409,20 +469,25 @@ namespace PB2Json
             case FieldDescriptor::CPPTYPE_MESSAGE:
             {
                 Message *pmessage = pReflection->MutableMessage(&message, pFieldDescriptor);
-                if (0 != ToPb(*pmessage, value))
+                if (key_map.size() == 0)
                 {
-                    return 1;
+                    ret = ToPb(*pmessage, value);
+                }
+                else
+                {
+                    ret = ToPbMap(*pmessage, value, key_map);
                 }
 
                 break;
             }
             default:
             {
+                ret = 1;
                 break;
             }
         }
 
-        return 0;
+        return ret;
     }
 
     int ToPb(Message& message, const Json::Value& value)
@@ -431,6 +496,7 @@ namespace PB2Json
         const Descriptor* pDescriptor = message.GetDescriptor();
         const FieldDescriptor* pFieldDescriptor = NULL;
         bool bRepeated = false;
+        map<string, string> key_map;
 
         for(int i = 0; i < pDescriptor->field_count(); i++)
         {
@@ -453,22 +519,23 @@ namespace PB2Json
 
             if (bRepeated)
             {
-                ret += ToPbRepeated(field, pFieldDescriptor, message);
+                ret += ToPbRepeated(field, pFieldDescriptor, message, key_map);
                 continue;
             }
 
-            ret += ToPbSingle(field, pFieldDescriptor, message);
+            ret += ToPbSingle(field, pFieldDescriptor, message, key_map);
         }
 
         return ret;
     }
-
-	int ToPb2(Message& message, const Json::Value& value)
+    
+    int ToPb2(Message& message, const Json::Value& value)
     {
         int ret = 0;
         const Descriptor* pDescriptor = message.GetDescriptor();
         const FieldDescriptor* pFieldDescriptor = NULL;
         bool bRepeated = false;
+        map<string, string> key_map;
 
         Json::Value::Members members(value.getMemberNames());
         for (Json::Value::Members::iterator it = members.begin(); it != members.end(); ++it)
@@ -495,11 +562,59 @@ namespace PB2Json
 
             if (bRepeated)
             {
-                ret += ToPbRepeated(value[name], pFieldDescriptor, message);
+                ret += ToPbRepeated(value[name], pFieldDescriptor, message, key_map);
                 continue;
             }
 
-            ret += ToPbSingle(value[name], pFieldDescriptor, message);
+            ret += ToPbSingle(value[name], pFieldDescriptor, message, key_map);
+        }
+
+        return ret;
+    }
+
+    int ToPbMap(Message& message, const Json::Value& value, map<string, string>& key_map)
+    {
+        int ret = 0;
+        const Descriptor* pDescriptor = message.GetDescriptor();
+        const FieldDescriptor* pFieldDescriptor = NULL;
+        bool bRepeated = false;
+
+        for(int i = 0; i < pDescriptor->field_count(); i++)
+        {
+            pFieldDescriptor = (FieldDescriptor *)pDescriptor->field(i);
+            string name_str = pFieldDescriptor->containing_type()->name() + "." + pFieldDescriptor->name();
+            
+            map<string, string>::iterator it = key_map.find(name_str);
+            if (it != key_map.end())
+            {
+                name_str = it->second;
+            }
+            else
+            {
+                name_str = pFieldDescriptor->name();
+            }
+
+            if (!value.isMember(name_str))
+            {
+                continue;
+            }
+
+            const Json::Value &field = value[name_str.c_str()];
+
+            bRepeated = pFieldDescriptor->is_repeated();
+            if ((bRepeated && !field.isArray()) || (!bRepeated && field.isArray()))
+            {
+                ret += 1;
+                continue;
+            }
+
+            if (bRepeated)
+            {
+                ret += ToPbRepeated(field, pFieldDescriptor, message, key_map);
+                continue;
+            }
+
+            ret += ToPbSingle(field, pFieldDescriptor, message, key_map);
         }
 
         return ret;
