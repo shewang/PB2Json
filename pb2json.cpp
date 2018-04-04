@@ -492,6 +492,11 @@ namespace PB2Json
 
     int ToPb(Message& message, const Json::Value& value)
     {
+        //非object类型，在debug编译选项下可能会导致触发assert，导致进程退出
+        if (value.type() != Json::objectValue)
+        {
+            return 1;
+        }
         int ret = 0;
         const Descriptor* pDescriptor = message.GetDescriptor();
         const FieldDescriptor* pFieldDescriptor = NULL;
@@ -531,6 +536,11 @@ namespace PB2Json
     
     int ToPb2(Message& message, const Json::Value& value)
     {
+        //非object类型，在debug编译选项下可能会导致触发assert，导致进程退出
+        if (value.type() != Json::objectValue)
+        {
+            return 1;
+        }
         int ret = 0;
         const Descriptor* pDescriptor = message.GetDescriptor();
         const FieldDescriptor* pFieldDescriptor = NULL;
